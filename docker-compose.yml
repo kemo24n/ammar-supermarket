@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ammar
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-strong-password}
+      POSTGRES_DB: ammar
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ammar"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: ., target: migrate }
+    environment:
+      DATABASE_URL: postgresql://ammar:${DB_PASSWORD:-change-me-strong-password}@db:5432/ammar
+      SEED_DEMO: ${SEED_DEMO:-1}
+    depends_on: { db: { condition: service_healthy } }
+    restart: "no"
+
+  app:
+    build: { context: ., target: runner }
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgresql://ammar:${DB_PASSWORD:-change-me-strong-password}@db:5432/ammar
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      NEXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      CALLMEBOT_PHONE: ${CALLMEBOT_PHONE:-}
+      CALLMEBOT_APIKEY: ${CALLMEBOT_APIKEY:-}
+    volumes: [uploads:/app/storage/uploads]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
+  uploads:
